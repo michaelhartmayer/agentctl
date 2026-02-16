@@ -136,7 +136,7 @@ program
     });
 
 const ctl = program.command('ctl')
-    .description('Agent Controller Management - Create, organizing, and managing commands');
+    .description('Agent Controller Management - Create, organize, and manage commands');
 
 // --- Lifecycle Commands ---
 // We'll stick to flat list but with good descriptions.
@@ -158,72 +158,107 @@ const withErrorHandling = <T extends unknown[]>(fn: (...args: T) => Promise<void
     };
 };
 
+
 ctl.command('scaffold')
-    .description('Create a new capped command with a script file')
-    .argument('<path...>', 'Command path segments (e.g., "dev start")')
+    .description('Scaffold a new command script (creates a manifest and a .sh/.cmd file)')
+    .argument('[path...]', 'The hierarchical path for the new command (e.g. "dev start")')
     .addHelpText('after', `
+Description:
+  Scaffolding creates a new directory for your command containing a 'manifest.json' 
+  and a boilerplate script file (.sh on Linux/Mac, .cmd on Windows).
+  You can then edit the script to add your own logic.
+
 Examples:
   $ agentctl ctl scaffold dev start
-  $ agentctl ctl scaffold sys backup
+  $ agentctl ctl scaffold utils/backup
 `)
-    .action(withErrorHandling(async (pathParts) => {
+    .action(withErrorHandling(async (pathParts, _options, command) => {
+        if (!pathParts || pathParts.length === 0) {
+            command.help();
+            return;
+        }
         await scaffold(pathParts);
     }));
 
 ctl.command('alias')
-    .description('Create a new capped command that runs an inline shell command')
-    .argument('<args...>', 'Name parts followed by target (e.g., "tools" "gh" "gh")')
-    .action(withErrorHandling(async (args) => {
-        if (args.length < 2) {
-            console.error('Usage: ctl alias <name...> <target>');
-            process.exit(1);
+    .description('Create an alias command that executes a shell string')
+    .argument('[path_and_cmd...]', 'Hierarchical path segments followed by the shell command')
+    .action(withErrorHandling(async (args, _options, command) => {
+        if (!args || args.length < 2) {
+            command.help();
+            return;
         }
         const target = args.pop()!;
         const name = args;
         await alias(name, target);
     }))
     .addHelpText('after', `
+How it works:
+  The last argument is always treated as the shell command to execute. 
+  All preceding arguments form the hierarchical path.
+
+  If the shell command contains spaces, wrap it in quotes.
+
 Examples:
-  $ agentctl ctl alias tools gh "gh"
+  $ agentctl ctl alias tools git-status "git status"
+    -> Creates 'agentctl tools git-status' which runs 'git status'.
+
   $ agentctl ctl alias dev build "npm run build"
+    -> Creates 'agentctl dev build' which runs 'npm run build'.
 `);
 
 ctl.command('group')
-    .description('Create a new command group (namespace)')
-    .argument('<path...>', 'Group path (e.g., "dev")')
+    .description('Create a command group (namespace) to organize related commands')
+    .argument('[path...]', 'Hierarchical path for the group (e.g. "dev")')
     .addHelpText('after', `
+Description:
+  Groups are essentially folders that contain other commands. 
+  They don't execute anything themselves but provide organization.
+
 Examples:
   $ agentctl ctl group dev
-  $ agentctl ctl group tools
+  $ agentctl ctl group tools/internal
 `)
-    .action(withErrorHandling(async (parts) => {
+    .action(withErrorHandling(async (parts, _options, command) => {
+        if (!parts || parts.length === 0) {
+            command.help();
+            return;
+        }
         await group(parts);
     }));
 
 ctl.command('rm')
     .description('Remove a command or group permanently')
-    .argument('<path...>', 'Command path to remove')
+    .argument('[path...]', 'Command path to remove')
     .option('--global', 'Remove from global scope')
     .addHelpText('after', `
 Examples:
   $ agentctl ctl rm dev start
   $ agentctl ctl rm tools --global
 `)
-    .action(withErrorHandling(async (parts, opts) => {
+    .action(withErrorHandling(async (parts, opts, command) => {
+        if (!parts || parts.length === 0) {
+            command.help();
+            return;
+        }
         await rm(parts, { global: opts.global });
     }));
 
 ctl.command('mv')
-    .description('Move a command or group to a new path')
-    .argument('<src>', 'Source path (quoted string or single token)')
-    .argument('<dest>', 'Destination path')
-    .option('--global', 'Move command in global scope')
+    .description('Move or rename a command or group')
+    .argument('[src]', 'Current path of the command')
+    .argument('[dest]', 'New path for the command')
+    .option('--global', 'Perform operation in global scope')
     .addHelpText('after', `
 Examples:
   $ agentctl ctl mv "dev start" "dev boot"
   $ agentctl ctl mv tools/gh tools/github --global
 `)
-    .action(withErrorHandling(async (src, dest, opts) => {
+    .action(withErrorHandling(async (src, dest, opts, command) => {
+        if (!src || !dest) {
+            command.help();
+            return;
+        }
         await mv(src.split(' '), dest.split(' '), { global: opts.global });
     }));
 
@@ -241,8 +276,12 @@ ctl.command('list')
 
 ctl.command('inspect')
     .description('Inspect the internal manifest and details of a command')
-    .argument('<path...>', 'Command path to inspect')
-    .action(withErrorHandling(async (parts) => {
+    .argument('[path...]', 'Command path to inspect')
+    .action(withErrorHandling(async (parts, _options, command) => {
+        if (!parts || parts.length === 0) {
+            command.help();
+            return;
+        }
         const info = await inspect(parts);
         if (info) {
             console.log(JSON.stringify(info, null, 2));
@@ -256,7 +295,7 @@ ctl.command('inspect')
 
 ctl.command('global')
     .description('Push a local command to the global scope')
-    .argument('<path...>', 'Local command path')
+    .argument('[path...]', 'Local command path')
     .option('--move', 'Move instead of copy')
     .option('--copy', 'Copy (default)')
     .addHelpText('after', `
@@ -264,20 +303,28 @@ Examples:
   $ agentctl ctl global sys --move
   $ agentctl ctl global tools --copy
 `)
-    .action(withErrorHandling(async (parts, opts) => {
+    .action(withErrorHandling(async (parts, opts, command) => {
+        if (!parts || parts.length === 0) {
+            command.help();
+            return;
+        }
         await pushGlobal(parts, { move: opts.move, copy: opts.copy || !opts.move });
     }));
 
 ctl.command('local')
     .description('Pull a global command to the local scope')
-    .argument('<path...>', 'Global command path')
+    .argument('[path...]', 'Global command path')
     .option('--move', 'Move instead of copy')
     .option('--copy', 'Copy (default)')
     .addHelpText('after', `
 Examples:
   $ agentctl ctl local tools --copy
 `)
-    .action(withErrorHandling(async (parts, opts) => {
+    .action(withErrorHandling(async (parts, opts, command) => {
+        if (!parts || parts.length === 0) {
+            command.help();
+            return;
+        }
         await pullLocal(parts, { move: opts.move, copy: opts.copy || !opts.move });
     }));
 
