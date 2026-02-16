@@ -17,7 +17,8 @@ export function findLocalRoot(cwd: string = process.cwd()): string | null {
     let current = path.resolve(cwd);
     const root = path.parse(current).root;
     // Safety break and root check
-    while (true) {
+    // Using for(;;) to avoid no-constant-condition
+    for (; ;) {
         if (fs.existsSync(path.join(current, '.agentctl'))) {
             return current;
         }

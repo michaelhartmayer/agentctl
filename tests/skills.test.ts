@@ -19,8 +19,8 @@ describe('ctl install-skill', () => {
         const skillPath = path.join(cwd, '.cursor', 'skills', 'agentctl.md');
         expect(await fs.pathExists(skillPath)).toBe(true);
         const content = await fs.readFile(skillPath, 'utf-8');
-        expect(content).toContain('Agent Controller');
-        expect(content).toContain('agentctl');
+        expect(content).toContain('Agent Controller (agentctl)');
+        expect(content).toContain('Core Capabilities');
     });
 
     it('installs agentsmd skill', async () => {
@@ -30,8 +30,8 @@ describe('ctl install-skill', () => {
         expect(await fs.pathExists(skillPath)).toBe(true);
         const content = await fs.readFile(skillPath, 'utf-8');
         expect(content).toContain('name: agentctl');
-        expect(content).toContain('Usage for AgentsMD'); // Wait, the generator didn't include this specific header, let's check generic content
-        expect(content).toContain('# Agent Controller');
+        expect(content).toContain('Agent Controller (agentctl)');
+        expect(content).toContain('Core Capabilities');
     });
 
     it('installs gemini skill', async () => {
@@ -41,7 +41,8 @@ describe('ctl install-skill', () => {
         expect(await fs.pathExists(skillPath)).toBe(true);
         const content = await fs.readFile(skillPath, 'utf-8');
         expect(content).toContain('name: agentctl');
-        expect(content).toContain('Usage for Gemini');
+        expect(content).toContain('Agent Controller (agentctl)');
+        expect(content).toContain('Best Practices for Agents');
     });
 
     it('installs gemini skill globally', async () => {
@@ -51,7 +52,7 @@ describe('ctl install-skill', () => {
         const skillPath = path.join(globalDir, 'skills', 'agentctl', 'SKILL.md');
         expect(await fs.pathExists(skillPath)).toBe(true);
         const content = await fs.readFile(skillPath, 'utf-8');
-        expect(content).toContain('Usage for Gemini');
+        expect(content).toContain('Agent Controller (agentctl)');
     });
 
     it('fails for unknown agent', async () => {

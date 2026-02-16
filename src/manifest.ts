@@ -5,7 +5,7 @@ export interface Manifest {
     description?: string;
     type?: 'scaffold' | 'alias' | 'group';
     run?: string;
-    flags?: Record<string, any>;
+    flags?: Record<string, unknown>;
 }
 
 export async function readManifest(p: string): Promise<Manifest | null> {

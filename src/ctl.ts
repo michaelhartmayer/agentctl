@@ -4,6 +4,19 @@ import { resolveCommand } from './resolve';
 import { findLocalRoot, getGlobalRoot, getAntigravityGlobalRoot } from './fs-utils';
 import { readManifest, isCappedManifest, Manifest } from './manifest';
 
+export interface ListItem {
+    path: string;
+    type: string;
+    scope: 'local' | 'global';
+    description: string;
+}
+
+export interface InspectResult {
+    manifest: Manifest | null;
+    resolvedPath: string;
+    scope: 'local' | 'global';
+}
+
 export async function scaffold(args: string[], options: { cwd?: string } = {}) {
     const { targetDir, name, isWin } = await prepareCommand(args, options);
 
@@ -113,7 +126,7 @@ export async function pullLocal(args: string[], options: { cwd?: string, globalD
 }
 
 
-import { generateCursorSkill, generateAntigravitySkill, generateAgentsMdSkill, generateGeminiSkill, SUPPORTED_AGENTS } from './skills';
+import { copySkill, SUPPORTED_AGENTS } from './skills';
 
 export async function installSkill(agent: string, options: { cwd?: string, global?: boolean, antigravityGlobalDir?: string, geminiGlobalDir?: string } = {}) {
     const cwd = options.cwd || process.cwd();
@@ -126,8 +139,6 @@ export async function installSkill(agent: string, options: { cwd?: string, globa
 
     if (agent === 'cursor') {
         targetDir = path.join(cwd, '.cursor', 'skills');
-        const p = await generateCursorSkill(targetDir);
-        console.log(`Installed skill for ${agent} at ${p}`);
     } else if (agent === 'antigravity') {
         if (options.global) {
             const globalRoot = options.antigravityGlobalDir || getAntigravityGlobalRoot();
@@ -135,13 +146,8 @@ export async function installSkill(agent: string, options: { cwd?: string, globa
         } else {
             targetDir = path.join(cwd, '.agent', 'skills', 'agentctl');
         }
-        const p = await generateAntigravitySkill(targetDir);
-        console.log(`Installed skill for ${agent} at ${p}`);
     } else if (agent === 'agentsmd') {
-        // agentsmd spec typically uses .agents/skills/
         targetDir = path.join(cwd, '.agents', 'skills', 'agentctl');
-        const p = await generateAgentsMdSkill(targetDir);
-        console.log(`Installed skill for ${agent} at ${p}`);
     } else if (agent === 'gemini') {
         if (options.global) {
             const globalRoot = options.geminiGlobalDir || path.join(process.env.HOME || process.env.USERPROFILE!, '.gemini');
@@ -149,9 +155,12 @@ export async function installSkill(agent: string, options: { cwd?: string, globa
         } else {
             targetDir = path.join(cwd, '.gemini', 'skills', 'agentctl');
         }
-        const p = await generateGeminiSkill(targetDir);
-        console.log(`Installed skill for ${agent} at ${p}`);
+    } else {
+        throw new Error(`Agent logic for '${agent}' not implemented.`);
     }
+
+    const p = await copySkill(targetDir, agent);
+    console.log(`Installed skill for ${agent} at ${p}`);
 }
 
 export async function rm(args: string[], options: { cwd?: string, globalDir?: string, global?: boolean } = {}) {
@@ -212,7 +221,7 @@ export async function mv(srcArgs: string[], destArgs: string[], options: { cwd?:
     console.log(`Moved ${srcArgs.join(' ')} to ${destArgs.join(' ')}`);
 }
 
-export async function inspect(args: string[], options: { cwd?: string, globalDir?: string } = {}): Promise<any> {
+export async function inspect(args: string[], options: { cwd?: string, globalDir?: string } = {}): Promise<InspectResult | null> {
     const resolved = await resolveCommand(args, options);
     if (!resolved) {
         return null;
@@ -224,12 +233,12 @@ export async function inspect(args: string[], options: { cwd?: string, globalDir
     };
 }
 
-export async function list(options: { cwd?: string, globalDir?: string } = {}): Promise<any[]> {
+export async function list(options: { cwd?: string, globalDir?: string } = {}): Promise<ListItem[]> {
     const cwd = options.cwd || process.cwd();
     const localRoot = findLocalRoot(cwd);
     const globalRoot = options.globalDir || getGlobalRoot();
 
-    const commands = new Map<string, any>();
+    const commands = new Map<string, ListItem>();
 
     async function walk(dir: string, prefix: string[], scope: 'local' | 'global') {
         if (!await fs.pathExists(dir)) return;
@@ -277,7 +286,7 @@ export async function list(options: { cwd?: string, globalDir?: string } = {}): 
                 }
             } else {
                 const existing = commands.get(cmdPath);
-                if (existing.scope === 'local') {
+                if (existing && existing.scope === 'local') {
                     if (existing.type === 'group' && type === 'group') {
                         await walk(filePath, cmdPathParts, scope);
                     }

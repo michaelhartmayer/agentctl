@@ -16,7 +16,7 @@ program
     .allowUnknownOption()
     .helpOption(false) // Disable default help to allow pass-through
     .argument('[command...]', 'Command to run')
-    .action(async (args, options, command) => {
+    .action(async (args, _options, _command) => {
         // If no args, check for help flag or just show help
         if (!args || args.length === 0) {
             // If they passed --help or -h, show help. If no args at all, show help.
@@ -86,6 +86,9 @@ program
                     runCmd = path.resolve(cmdDir, runCmd);
                 }
 
+                // Interpolate {{DIR}}
+                runCmd = runCmd.replace(/{{DIR}}/g, cmdDir);
+
                 const fullCommand = `${runCmd} ${remainingArgs.join(' ')}`;
                 console.log(chalk.dim(`[${scope}] Running: ${fullCommand}`));
 
@@ -121,8 +124,12 @@ program
                     console.log(`  ${child.path.split(' ').pop()}\t${chalk.dim(child.description)}`);
                 }
             }
-        } catch (e: any) {
-            console.error(chalk.red(e.message));
+        } catch (e: unknown) {
+            if (e instanceof Error) {
+                console.error(chalk.red(e.message));
+            } else {
+                console.error(chalk.red('An unknown error occurred'));
+            }
             process.exit(1);
         }
     });
@@ -134,12 +141,17 @@ const ctl = program.command('ctl')
 // We'll stick to flat list but with good descriptions.
 
 // Helper for consistent error handling
-const withErrorHandling = (fn: (...args: any[]) => Promise<void>) => {
-    return async (...args: any[]) => {
+// Helper for consistent error handling
+const withErrorHandling = <T extends unknown[]>(fn: (...args: T) => Promise<void>) => {
+    return async (...args: T) => {
         try {
             await fn(...args);
-        } catch (e: any) {
-            console.error(chalk.red(e.message));
+        } catch (e: unknown) {
+            if (e instanceof Error) {
+                console.error(chalk.red(e.message));
+            } else {
+                console.error(chalk.red(String(e)));
+            }
             process.exit(1);
         }
     };
@@ -311,7 +323,7 @@ Examples:
 
             program.addHelpText('after', lines.join('\n'));
         }
-    } catch (e) {
+    } catch {
         // Ignore errors during help generation (e.g. if not initialized)
     }
 
