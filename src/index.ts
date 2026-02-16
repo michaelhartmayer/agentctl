@@ -8,11 +8,12 @@ import { spawn } from 'child_process';
 import chalk from 'chalk';
 
 const program = new Command();
+import pkg from '../package.json';
 
 program
     .name('agentctl')
     .description('Agent Controller CLI - Unified control plane for humans and agents')
-    .version('1.0.0')
+    .version(pkg.version)
     .allowUnknownOption()
     .helpOption(false) // Disable default help to allow pass-through
     .argument('[command...]', 'Command to run')
