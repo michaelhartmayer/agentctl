@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.1.3](https://github.com/michaelhartmayer/agentctl/compare/v1.1.0...v1.1.3) (2026-02-26)
+
+
+### Bug Fixes
+
+* **cli:** clarify install and install-skill help descriptions to prevent ambiguity ([74cb478](https://github.com/michaelhartmayer/agentctl/commit/74cb478f0215264f38ed3ffdb5334d41bab45ebc))
+
 ### [1.1.2](https://github.com/michaelhartmayer/agentctl/compare/v1.1.0...v1.1.2) (2026-02-26)
 
 ### [1.1.1](https://github.com/michaelhartmayer/agentctl/compare/v1.1.0...v1.1.1) (2026-02-26)
