@@ -1,30 +1,25 @@
-import path from 'path';
 import os from 'os';
 import fs from 'fs-extra';
+import { UtilsLogic, SystemContext } from './logic/utils';
+
+export * from './logic/utils';
+
+function getRealContext(): SystemContext {
+    return {
+        platform: process.platform,
+        env: process.env,
+        homedir: process.env.HOME || process.env.USERPROFILE || os.homedir()
+    };
+}
 
 export function getGlobalRoot() {
-    if (process.platform === 'win32') {
-        return path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'agentctl');
-    }
-    return path.join(os.homedir(), '.config', 'agentctl');
+    return UtilsLogic.getGlobalRoot(getRealContext());
 }
 
 export function getAntigravityGlobalRoot() {
-    return path.join(os.homedir(), '.gemini', 'antigravity');
+    return UtilsLogic.getAntigravityGlobalRoot(getRealContext());
 }
 
 export function findLocalRoot(cwd: string = process.cwd()): string | null {
-    let current = path.resolve(cwd);
-    const root = path.parse(current).root;
-    // Safety break and root check
-    // Using for(;;) to avoid no-constant-condition
-    for (; ;) {
-        if (fs.existsSync(path.join(current, '.agentctl'))) {
-            return current;
-        }
-        if (current === root) {
-            return null;
-        }
-        current = path.dirname(current);
-    }
+    return UtilsLogic.findLocalRoot(cwd, fs.existsSync);
 }

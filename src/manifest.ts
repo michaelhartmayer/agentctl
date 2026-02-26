@@ -1,12 +1,7 @@
 import fs from 'fs-extra';
+import { Manifest, ManifestLogic } from './logic/manifest';
 
-export interface Manifest {
-    name: string;
-    description?: string;
-    type?: 'scaffold' | 'alias' | 'group';
-    run?: string;
-    flags?: Record<string, unknown>;
-}
+export * from './logic/manifest';
 
 export async function readManifest(p: string): Promise<Manifest | null> {
     try {
@@ -17,5 +12,5 @@ export async function readManifest(p: string): Promise<Manifest | null> {
 }
 
 export function isCappedManifest(m: Manifest): boolean {
-    return !!m.run || m.type === 'scaffold' || m.type === 'alias';
+    return ManifestLogic.isCappedManifest(m);
 }

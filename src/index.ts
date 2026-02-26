@@ -1,148 +1,27 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import path from 'path';
-import 'fs-extra';
-import { list, inspect, scaffold, alias, group, rm, mv, pushGlobal, pullLocal, installSkill } from './ctl';
-import { resolveCommand } from './resolve';
-import { spawn } from 'child_process';
 import chalk from 'chalk';
+import { list, inspect, scaffold, alias, group, rm, mv, pushGlobal, pullLocal, installSkill, install } from './ctl';
+import { resolveCommand } from './resolve';
+import { execute } from './effects';
+import { AppLogic } from './logic/index';
+import fs from 'fs';
+import path from 'path';
+
+const pkgPath = path.join(__dirname, '../package.json');
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 
 const program = new Command();
-import pkg from '../package.json';
 
 program
     .name('agentctl')
     .description('Agent Controller CLI - Unified control plane for humans and agents')
-    .version(pkg.version)
-    .allowUnknownOption()
-    .helpOption(false) // Disable default help to allow pass-through
-    .argument('[command...]', 'Command to run')
-    .action(async (args, _options, _command) => {
-        // If no args, check for help flag or just show help
-        if (!args || args.length === 0) {
-            // If they passed --help or -h, show help. If no args at all, show help.
-            // Since we ate options, we check raw args or just treat empty args as help.
-            // command.opts() won't have help if we disabled it? 
-            // Actually, if we disable helpOption, --help becomes an unknown option or arg.
-            // Let's check process.argv for -h or --help if args is empty?
-            // "agentctl --help" -> args=[], options might contain help if we didn't disable it?
-            // With helpOption(false), --help is just a flag in argv.
+    .version(pkg.version);
 
-            // If args is empty and we see help flag, show help.
-            if (process.argv.includes('--help') || process.argv.includes('-h') || process.argv.length <= 2) {
-                program.help();
-                return;
-            }
-        }
-
-        // If args are present, we try to resolve.
-        // BUT, "agentctl --help" will result in args being empty if it's parsed as option?
-        // Wait, if helpOption(false), then --help is an unknown option.
-        // If allowUnknownOption is true, it might not be in 'args' if it looks like a flag.
-        // Let's rely on resolveCommand. passed args are variadic.
-
-        // However, "agentctl dev --help" -> args=["dev", "--help"]? 
-        // My repro says yes: [ 'dev-tools', 'gh', '--help' ].
-
-        // So for "agentctl --help", args might be ["--help"].
-        if (args.length === 1 && (args[0] === '--help' || args[0] === '-h')) {
-            program.help();
-            return;
-        }
-
-        // Bypass for ctl subcommand if it slipped through (shouldn't if registered)
-        if (args[0] === 'ctl') return;
-
-        try {
-            // resolveCommand needs to handle flags in args if they are part of the path?
-            // No, flags usually come after. resolveCommand stops at first non-matching path part?
-            // resolveCommand logic: iterates args.
-            // "dev-tools gh --help" -> path "dev-tools gh", remaining "--help"
-
-            const result = await resolveCommand(args);
-            if (!result) {
-                // If not found, and they asked for help, show root help?
-                // Or if they just typed a wrong command.
-                if (args.includes('--help') || args.includes('-h')) {
-                    // Try to show help for the partial command? 
-                    // For now, just show root list/help or error.
-                    // If it's "agentctl dev --help" and "dev" is a group, resolveCommand SHOULD return the group.
-                }
-
-                console.error(chalk.red(`Command '${args.join(' ')}' not found.`));
-                console.log(`Run ${chalk.cyan('agentctl list')} to see available commands.`);
-                process.exit(1);
-            }
-
-            const { manifest, args: remainingArgs, scope } = result;
-
-            if (manifest.run) {
-                // ... run logic ...
-                // remainingArgs should contain --help if it was passed.
-                const cmdDir = path.dirname(result.manifestPath);
-                let runCmd = manifest.run;
-
-                // Resolve relative path
-                if (runCmd.startsWith('./') || runCmd.startsWith('.\\')) {
-                    runCmd = path.resolve(cmdDir, runCmd);
-                }
-
-                // Interpolate {{DIR}}
-                runCmd = runCmd.replace(/{{DIR}}/g, cmdDir);
-
-                const fullCommand = `${runCmd} ${remainingArgs.join(' ')}`;
-                console.log(chalk.dim(`[${scope}] Running: ${fullCommand}`));
-
-                const child = spawn(fullCommand, {
-                    cwd: process.cwd(), // Execute in CWD as discussed
-                    shell: true,
-                    stdio: 'inherit',
-                    env: { ...process.env, AGENTCTL_SCOPE: scope }
-                });
-
-                child.on('exit', (code) => {
-                    process.exit(code || 0);
-                });
-            } else {
-                // Group
-                console.log(chalk.blue(chalk.bold(`${manifest.name}`)));
-                console.log(manifest.description || 'No description');
-                console.log('\nSubcommands:');
-
-                const all = await list();
-                const prefix = result.cmdPath + ' ';
-                // Filter logic roughly for direct children
-                const depth = result.cmdPath.split(' ').length;
-
-                const children = all.filter(c => c.path.startsWith(prefix) && c.path !== result.cmdPath);
-                const direct = children.filter(c => c.path.split(' ').length === depth + 1);
-
-                if (direct.length === 0 && children.length === 0) {
-                    console.log(chalk.dim('  (No subcommands found)'));
-                }
-
-                for (const child of direct) {
-                    console.log(`  ${child.path.split(' ').pop()}\t${chalk.dim(child.description)}`);
-                }
-            }
-        } catch (e: unknown) {
-            if (e instanceof Error) {
-                console.error(chalk.red(e.message));
-            } else {
-                console.error(chalk.red('An unknown error occurred'));
-            }
-            process.exit(1);
-        }
-    });
-
+// --- Subcommand: ctl ---
 const ctl = program.command('ctl')
     .description('Agent Controller Management - Create, organize, and manage commands');
 
-// --- Lifecycle Commands ---
-// We'll stick to flat list but with good descriptions.
-
-// Helper for consistent error handling
-// Helper for consistent error handling
 const withErrorHandling = <T extends unknown[]>(fn: (...args: T) => Promise<void>) => {
     return async (...args: T) => {
         try {
@@ -158,21 +37,22 @@ const withErrorHandling = <T extends unknown[]>(fn: (...args: T) => Promise<void
     };
 };
 
-
 ctl.command('scaffold')
-    .description('Scaffold a new command script (creates a manifest and a .sh/.cmd file)')
-    .argument('[path...]', 'The hierarchical path for the new command (e.g. "dev start")')
+    .description('Scaffold a new command directory with a manifest and starter script.')
+    .argument('[path...]', 'Hierarchical path for the new command (e.g., "dev start" or "utils/cleanup")')
+    .summary('create a new command')
     .addHelpText('after', `
-Description:
-  Scaffolding creates a new directory for your command containing a 'manifest.json' 
-  and a boilerplate script file (.sh on Linux/Mac, .cmd on Windows).
-  You can then edit the script to add your own logic.
+Additional Info:
+  This command creates a folder in your local .agentctl directory.
+  Inside, it generates:
+    - manifest.json: Metadata about the command.
+    - command.sh/cmd: A starter script for your logic.
 
 Examples:
-  $ agentctl ctl scaffold dev start
+  $ agentctl ctl scaffold build front
   $ agentctl ctl scaffold utils/backup
 `)
-    .action(withErrorHandling(async (pathParts, _options, command) => {
+    .action(withErrorHandling(async (pathParts: string[], opts: any, command: Command) => {
         if (!pathParts || pathParts.length === 0) {
             command.help();
             return;
@@ -181,9 +61,15 @@ Examples:
     }));
 
 ctl.command('alias')
-    .description('Create an alias command that executes a shell string')
-    .argument('[path_and_cmd...]', 'Hierarchical path segments followed by the shell command')
-    .action(withErrorHandling(async (args, _options, command) => {
+    .description('Create a command that executes a raw shell string.')
+    .argument('[args...]', 'Hierarchical path segments followed by the shell command target')
+    .summary('create a shell alias')
+    .addHelpText('after', `
+Examples:
+  $ agentctl ctl alias dev logs "docker compose logs -f"
+  $ agentctl ctl alias list-files "ls -la"
+`)
+    .action(withErrorHandling(async (args: string[], opts: any, command: Command) => {
         if (!args || args.length < 2) {
             command.help();
             return;
@@ -191,35 +77,22 @@ ctl.command('alias')
         const target = args.pop()!;
         const name = args;
         await alias(name, target);
-    }))
-    .addHelpText('after', `
-How it works:
-  The last argument is always treated as the shell command to execute. 
-  All preceding arguments form the hierarchical path.
-
-  If the shell command contains spaces, wrap it in quotes.
-
-Examples:
-  $ agentctl ctl alias tools git-status "git status"
-    -> Creates 'agentctl tools git-status' which runs 'git status'.
-
-  $ agentctl ctl alias dev build "npm run build"
-    -> Creates 'agentctl dev build' which runs 'npm run build'.
-`);
+    }));
 
 ctl.command('group')
-    .description('Create a command group (namespace) to organize related commands')
-    .argument('[path...]', 'Hierarchical path for the group (e.g. "dev")')
+    .description('Create a command group (namespace) to organize subcommands.')
+    .argument('[path...]', 'Hierarchical path for the group (e.g., "dev" or "cloud/aws")')
+    .summary('create a namespace group')
     .addHelpText('after', `
-Description:
-  Groups are essentially folders that contain other commands. 
-  They don't execute anything themselves but provide organization.
+Additional Info:
+  Groups allow you to categorize commands. Running a group command without
+  subcommands will list all direct subcommands within that group.
 
 Examples:
   $ agentctl ctl group dev
-  $ agentctl ctl group tools/internal
+  $ agentctl ctl group data/pipelines
 `)
-    .action(withErrorHandling(async (parts, _options, command) => {
+    .action(withErrorHandling(async (parts: string[], opts: any, command: Command) => {
         if (!parts || parts.length === 0) {
             command.help();
             return;
@@ -228,15 +101,16 @@ Examples:
     }));
 
 ctl.command('rm')
-    .description('Remove a command or group permanently')
+    .description('Permanently remove a command or group.')
     .argument('[path...]', 'Command path to remove')
-    .option('--global', 'Remove from global scope')
+    .option('-g, --global', 'Remove from global scope instead of local')
+    .summary('delete a command')
     .addHelpText('after', `
 Examples:
   $ agentctl ctl rm dev start
-  $ agentctl ctl rm tools --global
+  $ agentctl ctl rm utils --global
 `)
-    .action(withErrorHandling(async (parts, opts, command) => {
+    .action(withErrorHandling(async (parts: string[], opts: any, command: Command) => {
         if (!parts || parts.length === 0) {
             command.help();
             return;
@@ -245,16 +119,17 @@ Examples:
     }));
 
 ctl.command('mv')
-    .description('Move or rename a command or group')
-    .argument('[src]', 'Current path of the command')
-    .argument('[dest]', 'New path for the command')
-    .option('--global', 'Perform operation in global scope')
+    .description('Move or rename a command/group within its current scope.')
+    .argument('[src]', 'Current path (space-separated or quoted)')
+    .argument('[dest]', 'New path (space-separated or quoted)')
+    .option('-g, --global', 'Operate in global scope')
+    .summary('rename/move a command')
     .addHelpText('after', `
 Examples:
-  $ agentctl ctl mv "dev start" "dev boot"
-  $ agentctl ctl mv tools/gh tools/github --global
+  $ agentctl ctl mv "dev start" "dev begin"
+  $ agentctl ctl mv utils scripts --global
 `)
-    .action(withErrorHandling(async (src, dest, opts, command) => {
+    .action(withErrorHandling(async (src: string | undefined, dest: string | undefined, opts: any, command: Command) => {
         if (!src || !dest) {
             command.help();
             return;
@@ -262,22 +137,35 @@ Examples:
         await mv(src.split(' '), dest.split(' '), { global: opts.global });
     }));
 
-// --- Introspection ---
-
 ctl.command('list')
-    .description('List all available commands across local and global scopes')
+    .description('List all available commands across local and global scopes.')
+    .summary('list all commands')
+    .addHelpText('after', `
+Output Columns:
+  TYPE      - scaffold, alias, or group
+  SCOPE     - local (project-specific) or global (user-wide)
+  COMMAND   - The path used to invoke the command
+  DESCRIPTION - Brief text from the command's manifest
+`)
     .action(withErrorHandling(async () => {
         const items = await list();
-        console.log('TYPE      SCOPE     COMMAND             DESCRIPTION');
+        console.log(chalk.bold('TYPE      SCOPE     COMMAND             DESCRIPTION'));
         for (const item of items) {
-            console.log(`${item.type.padEnd(9)} ${item.scope.padEnd(9)} ${item.path.padEnd(19)} ${item.description}`);
+            const typePipe = item.type.padEnd(9);
+            const scopePipe = item.scope === 'local' ? chalk.cyan(item.scope.padEnd(9)) : chalk.magenta(item.scope.padEnd(9));
+            console.log(`${typePipe} ${scopePipe} ${chalk.yellow(item.path.padEnd(19))} ${item.description}`);
         }
     }));
 
 ctl.command('inspect')
-    .description('Inspect the internal manifest and details of a command')
+    .description('Show the internal manifest and file system path of a command.')
     .argument('[path...]', 'Command path to inspect')
-    .action(withErrorHandling(async (parts, _options, command) => {
+    .summary('inspect command details')
+    .addHelpText('after', `
+Examples:
+  $ agentctl ctl inspect dev start
+`)
+    .action(withErrorHandling(async (parts: string[], opts: any, command: Command) => {
         if (!parts || parts.length === 0) {
             command.help();
             return;
@@ -286,24 +174,26 @@ ctl.command('inspect')
         if (info) {
             console.log(JSON.stringify(info, null, 2));
         } else {
-            console.error('Command not found');
+            console.error(chalk.red('Command not found'));
             process.exit(1);
         }
     }));
 
-// --- Scoping ---
-
 ctl.command('global')
-    .description('Push a local command to the global scope')
-    .argument('[path...]', 'Local command path')
-    .option('--move', 'Move instead of copy')
-    .option('--copy', 'Copy (default)')
+    .description('Promote a local command to the global scope.')
+    .argument('[path...]', 'Local command path to promote')
+    .option('-m, --move', 'Move the command (delete local after copying)')
+    .option('-c, --copy', 'Copy the command (keep local version, default)')
+    .summary('make a command global')
     .addHelpText('after', `
+Additional Info:
+  Global commands are stored in your home directory and are available in any project.
+
 Examples:
-  $ agentctl ctl global sys --move
-  $ agentctl ctl global tools --copy
+  $ agentctl ctl global utils/cleanup
+  $ agentctl ctl global dev/deploy --move
 `)
-    .action(withErrorHandling(async (parts, opts, command) => {
+    .action(withErrorHandling(async (parts: string[], opts: any, command: Command) => {
         if (!parts || parts.length === 0) {
             command.help();
             return;
@@ -312,15 +202,17 @@ Examples:
     }));
 
 ctl.command('local')
-    .description('Pull a global command to the local scope')
-    .argument('[path...]', 'Global command path')
-    .option('--move', 'Move instead of copy')
-    .option('--copy', 'Copy (default)')
+    .description('Pull a global command into the current local project.')
+    .argument('[path...]', 'Global command path to pull')
+    .option('-m, --move', 'Move the command (delete global after pulling)')
+    .option('-c, --copy', 'Copy the command (keep global version, default)')
+    .summary('make a command local')
     .addHelpText('after', `
 Examples:
-  $ agentctl ctl local tools --copy
+  $ agentctl ctl local utils/shared
+  $ agentctl ctl local snippets/js --move
 `)
-    .action(withErrorHandling(async (parts, opts, command) => {
+    .action(withErrorHandling(async (parts: string[], opts: any, command: Command) => {
         if (!parts || parts.length === 0) {
             command.help();
             return;
@@ -328,52 +220,129 @@ Examples:
         await pullLocal(parts, { move: opts.move, copy: opts.copy || !opts.move });
     }));
 
-// --- Agent Integration ---
-// We attach this to the root `ctl` as options or a sub-command? 
-// Original code had it as options on `ctl`. We can make it a command for better help.
-// But sticking to options maintains compatibility. We'll improve the option help.
-
-ctl.option('--install-skill <agent>', 'Install skill for agent (cursor, antigravity, agentsmd, gemini)')
-    .option('--global', 'Install skill globally (for supported agents)')
+ctl.command('install-skill')
+    .description('Configure a supported AI agent (like Cursor or Gemini) to natively use Agentctl.')
+    .argument('[agent]', 'Agent name (cursor, antigravity, agentsmd, gemini)')
+    .option('-g, --global', 'Install globally for the agent (if supported)')
+    .summary('configure AI agent integration')
     .addHelpText('after', `
+Supported Agents:
+  - cursor      (Installs to .cursor/skills)
+  - antigravity (Installs to .agent/skills or ~/.gemini/antigravity)
+  - agentsmd    (Installs to .agents/skills)
+  - gemini      (Installs to .gemini/skills or ~/.gemini/skills)
+
 Examples:
-  $ agentctl ctl --install-skill cursor
-  $ agentctl ctl --install-skill antigravity --global
-  $ agentctl ctl --install-skill gemini
+  $ agentctl ctl install-skill cursor
+  $ agentctl ctl install-skill antigravity --global
 `)
-    .action(withErrorHandling(async (op, command) => {
-        const opts = ctl.opts();
-        if (opts.installSkill) {
-            await installSkill(opts.installSkill, { global: opts.global });
-        } else {
-            // If no subcmd and no option, show help
-            if (command.args.length === 0) {
-                ctl.help();
-            }
+    .action(withErrorHandling(async (agent: string | undefined, opts: any, command: Command) => {
+        if (!agent) {
+            command.help();
+            return;
         }
+        await installSkill(agent, { global: opts.global });
     }));
 
-// Inject dynamic commands into root help
-// We need to do this before parsing
+ctl.command('install')
+    .description('Install a command group from a remote Git repository.')
+    .argument('[repoUrl]', 'URL of the remote Git repository containing an .agentctl folder')
+    .argument('[pathParts...]', 'Optional local namespace/group to install into')
+    .option('-g, --global', 'Install globally instead of locally')
+    .option('--allow-collisions', 'Allow overwriting existing commands or merging into groups')
+    .summary('install remote command group')
+    .addHelpText('after', `
+Additional Info:
+  Fetches the .agentctl folder from the remote repository and installs it into
+  your local or global agentctl environment.
+
+Examples:
+  $ agentctl ctl install https://github.com/org/repo-tools
+  $ agentctl ctl install https://github.com/org/deploy-scripts deploy --global
+`)
+    .action(withErrorHandling(async (repoUrl: string | undefined, pathParts: string[], opts: any, command: Command) => {
+        if (!repoUrl) {
+            command.help();
+            return;
+        }
+        await install(repoUrl, pathParts, { global: opts.global, allowCollisions: opts.allowCollisions });
+    }));
+
+
+// --- Dynamic Command Logic ---
+
+async function handleDynamicCommand(args: string[]) {
+    try {
+        const result = await resolveCommand(args);
+        if (!result) {
+            const effects = AppLogic.planApp(args, null);
+            await execute(effects.map(e => e.type === 'log' ? { ...e, message: chalk.red(e.message) } : e));
+            process.exit(1);
+        }
+
+        if (result.manifest.run) {
+            const effects = AppLogic.planApp(args, result);
+            await execute(effects);
+        } else {
+            const all = await list();
+            const effects = AppLogic.planGroupList(result.manifest, result.cmdPath, all);
+            await execute(effects.map(e => {
+                if (e.type === 'log') {
+                    if (e.message === result.manifest.name) return { ...e, message: chalk.blue(chalk.bold(e.message)) };
+                    if (e.message === '\nSubcommands:') return e;
+                    if (e.message.startsWith('  ')) return e;
+                    if (e.message === 'No description') return { ...e, message: chalk.dim(e.message) };
+                }
+                return e;
+            }));
+        }
+    } catch (e: unknown) {
+        if (e instanceof Error) {
+            console.error(chalk.red(e.message));
+        } else {
+            console.error(chalk.red('An unknown error occurred'));
+        }
+        process.exit(1);
+    }
+}
+
 (async () => {
+    // Add help text for user commands dynamically
     try {
         const allCommands = await list();
-        const topLevel = allCommands.filter(c => !c.path.includes(' ')); // Only top level
+        const topLevel = allCommands.filter(c => !c.path.includes(' '));
 
         if (topLevel.length > 0) {
             const lines = [''];
-            lines.push('User Commands:');
+            lines.push(chalk.bold('User Commands:'));
             for (const cmd of topLevel) {
-                // simple padding
-                lines.push(`  ${cmd.path.padEnd(27)}${cmd.description}`);
+                lines.push(`  ${chalk.yellow(cmd.path.padEnd(27))}${cmd.description}`);
             }
             lines.push('');
-
             program.addHelpText('after', lines.join('\n'));
         }
     } catch {
-        // Ignore errors during help generation (e.g. if not initialized)
+        // Ignore errors during help generation
     }
 
-    program.parse(process.argv);
+    // Process arguments
+    const args = process.argv.slice(2);
+
+    // If no args, show help
+    if (args.length === 0) {
+        program.help();
+        return;
+    }
+
+    // Special case: if it starts with 'ctl', or is '--help', '--version', '-h', etc.,
+    // let commander handle it natively.
+    const firstArg = args[0];
+    const isStandardCommand = ['ctl', '--help', '-h', '--version', '-V'].includes(firstArg) || firstArg.startsWith('-');
+
+    if (isStandardCommand) {
+        program.parse(process.argv);
+    } else {
+        // It's a dynamic command
+        await handleDynamicCommand(args);
+    }
 })();
