@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.2.0](https://github.com/michaelhartmayer/agentctl/compare/v1.1.4...v1.2.0) (2026-03-01)
+
+
+### Features
+
+* add default action to ctl command to show help ([06d5d13](https://github.com/michaelhartmayer/agentctl/commit/06d5d1309bd9fa7c5943cffa7b7ed7208e507b38))
+
 ### [1.1.4](https://github.com/michaelhartmayer/agentctl/compare/v1.1.3...v1.1.4) (2026-03-01)
 
 ### [1.1.3](https://github.com/michaelhartmayer/agentctl/compare/v1.1.0...v1.1.3) (2026-02-26)
