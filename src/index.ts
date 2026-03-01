@@ -31,6 +31,9 @@ const ctl = program.command('ctl')
     .description('Agent Controller Management - Create, organize, and manage commands')
     .addHelpCommand(false)
     .configureHelp({ visibleCommands: () => [] })
+    .action((opts: CtlOptions, command: Command) => {
+        command.help();
+    })
     .addHelpText('after', `
 ${chalk.bold('Agentctl Paradigm:')}
   Agentctl acts as a unified control plane allowing both Humans and AI Agents
