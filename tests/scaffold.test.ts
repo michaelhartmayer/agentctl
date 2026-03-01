@@ -28,8 +28,11 @@ describe('ctl scaffold', () => {
         expect(manifest).toEqual(expect.objectContaining({
             name: 'deploy',
             type: 'scaffold',
-            description: '',
+            description: '<insert summary>',
+            help: '<insert usage/help instructions>',
         }));
+
+        expect(manifest.run).toBeDefined();
 
         const scriptPath = path.join(cmdDir, manifest.run);
         expect(await fs.pathExists(scriptPath)).toBe(true);

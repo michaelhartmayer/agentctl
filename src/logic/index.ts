@@ -11,6 +11,17 @@ export const AppLogic = {
 
         const { manifest, args: remainingArgs, scope, manifestPath, cmdPath } = result;
 
+        const effects: Effect[] = [];
+
+        const allowedKeys = new Set(['name', 'description', 'help', 'type', 'run', 'flags']);
+        const unsupportedKeys = Object.keys(manifest).filter(k => !allowedKeys.has(k));
+        if (unsupportedKeys.length > 0) {
+            effects.push({
+                type: 'log',
+                message: `[WARNING] The manifest at ${manifestPath} contains unsupported keys: ${unsupportedKeys.join(', ')}. Agentctl will ignore them.`
+            });
+        }
+
         if (manifest.run) {
             const cmdDir = path.dirname(manifestPath);
             let runCmd = manifest.run;
@@ -23,7 +34,7 @@ export const AppLogic = {
 
             const fullCommand = `${runCmd} ${remainingArgs.join(' ')}`;
 
-            return [
+            effects.push(
                 { type: 'log', message: `[${scope}] Running: ${fullCommand}` },
                 {
                     type: 'spawn',
@@ -38,18 +49,32 @@ export const AppLogic = {
                         process.exit(code || 0);
                     }
                 }
-            ];
+            );
+            return effects;
         } else {
-            return AppLogic.planGroupList(manifest, cmdPath, []); // Shell will call this again with actual children
+            return [...effects, ...AppLogic.planGroupList(manifest, cmdPath, [], manifestPath)];
         }
     },
 
-    planGroupList(manifest: Manifest, cmdPath: string, allCommands: { path: string, description: string }[]): Effect[] {
-        const effects: Effect[] = [
+    planGroupList(manifest: Manifest, cmdPath: string, allCommands: { path: string, description: string }[], manifestPath?: string): Effect[] {
+        const effects: Effect[] = [];
+
+        if (manifestPath) {
+            const allowedKeys = new Set(['name', 'description', 'help', 'type', 'run', 'flags']);
+            const unsupportedKeys = Object.keys(manifest).filter(k => !allowedKeys.has(k));
+            if (unsupportedKeys.length > 0) {
+                effects.push({
+                    type: 'log',
+                    message: `[WARNING] The manifest at ${manifestPath} contains unsupported keys: ${unsupportedKeys.join(', ')}. Agentctl will ignore them.`
+                });
+            }
+        }
+
+        effects.push(
             { type: 'log', message: manifest.name },
-            { type: 'log', message: manifest.description || 'No description' },
+            { type: 'log', message: manifest.help || manifest.description || 'Command group containing subcommands' },
             { type: 'log', message: '\nSubcommands:' }
-        ];
+        );
 
         const prefix = cmdPath + ' ';
         const depth = cmdPath.split(' ').length;
@@ -62,7 +87,8 @@ export const AppLogic = {
         } else {
             for (const child of direct) {
                 const name = child.path.split(' ').pop();
-                effects.push({ type: 'log', message: `  ${name}\t${child.description}` });
+                const desc = child.description || 'Command group containing subcommands';
+                effects.push({ type: 'log', message: `  ${name}\t${desc}` });
             }
         }
 

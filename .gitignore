@@ -40,3 +40,5 @@ technical-design.md
 
 # Agent
 .agent
+.agentctl
+cmd-test.js

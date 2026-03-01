@@ -29,7 +29,8 @@ describe('ctl alias', () => {
             name: 'gh',
             type: 'alias',
             run: 'gh',
-            description: '',
+            description: '<insert summary>',
+            help: '<insert usage/help instructions>',
         }));
 
         const scriptPath = path.join(cmdDir, 'command.sh');

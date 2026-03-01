@@ -49,7 +49,8 @@ export const Logic = {
 
         const manifest: Manifest = {
             name,
-            description: '',
+            description: '<insert summary>',
+            help: '<insert usage/help instructions>',
             type,
         };
 

@@ -33,7 +33,7 @@ describe('Logic: install', () => {
 
         it('throws if trying to install locally outside a project', () => {
             expect(() => {
-                planInstallClone({ ...baseCtx, localRoot: null }, { tempFolderName: 'test' });
+                planInstallClone({ ...baseCtx, localRoot: (null as unknown as string) }, { tempFolderName: 'test' });
             }).toThrow('Not in a local context');
         });
     });
@@ -87,7 +87,7 @@ describe('Logic: install', () => {
                 }
             );
 
-            const copyEffect = effects.find(e => e.type === 'copy') as any;
+            const copyEffect = (effects.find(e => e.type === 'copy') as unknown) as { options: { overwrite: boolean } };
             expect(copyEffect.options).toMatchObject({ overwrite: true });
         });
 
@@ -103,12 +103,12 @@ describe('Logic: install', () => {
 
             expect(effects[0].type).toBe('mkdir');
             // path.join('/global') results in '\global' on Windows, so we use path.join
-            expect((effects[0] as any).path).toBe(path.join('/global'));
+            expect(((effects[0] as unknown) as { path: string }).path).toBe(path.join('/global'));
         });
 
         it('throws if trying to install locally outside a project', () => {
             expect(() => {
-                planInstallCopy({ ...baseCtx, localRoot: null }, {
+                planInstallCopy({ ...baseCtx, localRoot: (null as unknown as string) }, {
                     tempAgentctlDir: 'a', existingItems: [], downloadedItems: []
                 });
             }).toThrow('Not in a local context');
@@ -131,16 +131,25 @@ describe('Logic: install', () => {
         });
 
         it('orchestrates clone and copy', async () => {
-            (fs.pathExists as any).mockResolvedValue(true);
-            (fs.readdir as any).mockResolvedValue(['test-cmd']);
+            vi.mocked(fs.pathExists).mockResolvedValue(true);
+            vi.mocked(fs.readdir).mockResolvedValue(['test-cmd']);
 
             await install('https://github.com/foo/bar', ['mygroup'], { global: true, allowCollisions: true });
             expect(effects.execute).toHaveBeenCalledTimes(2);
         });
 
+        it('orchestrates clone and copy in a new local root', async () => {
+            vi.mocked(fs.pathExists).mockResolvedValue(true);
+            vi.mocked(fs.readdir).mockResolvedValue(['test-cmd']);
+            vi.spyOn(fsUtils, 'findLocalRoot').mockReturnValue(null);
+
+            await install('https://github.com/foo/bar', ['mygroup'], { allowCollisions: true });
+            expect(effects.execute).toHaveBeenCalledTimes(2);
+        });
+
         it('orchestrates clone and copy locally', async () => {
-            (fs.pathExists as any).mockResolvedValue(true);
-            (fs.readdir as any).mockResolvedValue(['test-cmd']);
+            vi.mocked(fs.pathExists).mockResolvedValue(true);
+            vi.mocked(fs.readdir).mockResolvedValue(['test-cmd']);
             vi.spyOn(fsUtils, 'findLocalRoot').mockReturnValue('/project');
 
             await install('https://github.com/foo/bar', ['mygroup'], { allowCollisions: true });
@@ -148,11 +157,11 @@ describe('Logic: install', () => {
         });
 
         it('orchestrates clone and copy when target does not exist', async () => {
-            (fs.pathExists as any).mockImplementation(async (p: string) => {
+            vi.mocked(fs.pathExists).mockImplementation(async (p: string) => {
                 // Must return true for tempAgentctlDir
                 return p.includes('agentctl-install-');
             });
-            (fs.readdir as any).mockResolvedValue(['test-cmd']);
+            vi.mocked(fs.readdir).mockResolvedValue(['test-cmd']);
             vi.spyOn(fsUtils, 'findLocalRoot').mockReturnValue('/project');
 
             await install('https://github.com/foo/bar', ['mygroup']);
@@ -160,7 +169,7 @@ describe('Logic: install', () => {
         });
 
         it('throws if repository has no .agentctl directory', async () => {
-            (fs.pathExists as any).mockImplementation(async (p: any) => {
+            vi.mocked(fs.pathExists).mockImplementation(async (p: unknown) => {
                 if (typeof p === 'string' && p.endsWith('.agentctl')) return false;
                 if (typeof p === 'string' && p.includes('.agentctl')) return true;
                 return true;

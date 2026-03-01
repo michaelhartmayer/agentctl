@@ -199,7 +199,8 @@ export async function install(repoUrl: string, pathArgs: string[], options: { cw
         pathParts: pathArgs,
         global: !!options.global,
         allowCollisions: !!options.allowCollisions,
-        localRoot: ctx.localRoot,
+        localRoot: ctx.localRoot || ctx.cwd,
+        isNewLocalRoot: !options.global && !ctx.localRoot,
         globalRoot: ctx.globalRoot,
         osTmpdir: os.tmpdir()
     };
@@ -218,7 +219,7 @@ export async function install(repoUrl: string, pathArgs: string[], options: { cw
 
     const downloadedItems = await fs.readdir(tempAgentctlDir);
 
-    const rootDir = installCtx.global ? installCtx.globalRoot : installCtx.localRoot!;
+    const rootDir = installCtx.global ? installCtx.globalRoot : installCtx.localRoot;
     const agentctlDir = installCtx.global ? rootDir : path.join(rootDir, '.agentctl');
     const targetDir = path.join(agentctlDir, ...installCtx.pathParts);
 
@@ -259,10 +260,11 @@ export async function list(options: { cwd?: string, globalDir?: string } = {}): 
                 else if (manifest.type) type = manifest.type;
             }
 
-            const item = { path: cmdPath, type, scope, description: manifest?.description || '' };
-
             if (!commands.has(cmdPath)) {
-                commands.set(cmdPath, item);
+                if (manifest) {
+                    const item = { path: cmdPath, type, scope, description: manifest.description || '' };
+                    commands.set(cmdPath, item);
+                }
                 const effectiveManifest = manifest || { name: file, type: 'group' } as Manifest;
                 if (!isCappedManifest(effectiveManifest)) await walk(filePath, cmdPathParts, scope);
             } else {

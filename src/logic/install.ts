@@ -6,15 +6,17 @@ export interface InstallContext {
     pathParts: string[];
     global: boolean;
     allowCollisions: boolean;
-    localRoot: string | null;
+    localRoot: string;
     globalRoot: string;
     osTmpdir: string;
+    isNewLocalRoot?: boolean;
 }
 
 export function planInstallClone(ctx: InstallContext, deps: { tempFolderName: string }): { effects: Effect[], tempDir: string } {
     if (!ctx.global && !ctx.localRoot) {
         throw new Error('Not in a local context. Run inside a project or use --global');
     }
+
 
     const tempDir = path.join(ctx.osTmpdir, deps.tempFolderName);
 
@@ -61,6 +63,10 @@ export function planInstallCopy(ctx: InstallContext, deps: {
 
     // Ensure target path exists
     effects.push({ type: 'mkdir', path: targetDir });
+
+    if (!ctx.global && ctx.isNewLocalRoot) {
+        effects.push({ type: 'log', message: `Initialized new .agentctl folder at ${agentctlDir}` });
+    }
 
     // Copy contents
     effects.push({

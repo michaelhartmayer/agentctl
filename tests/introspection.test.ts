@@ -39,25 +39,15 @@ describe('ctl introspection', () => {
         const results = await list({ cwd: localRoot, globalDir: globalRoot });
 
         const paths = results.map(r => r.path).sort();
-        expect(paths).toContain('dev');
+        expect(paths).not.toContain('dev');
         expect(paths).toContain('dev start');
         expect(paths).toContain('gh');
-        expect(paths).toContain('tools');
+        expect(paths).not.toContain('tools');
         expect(paths).toContain('tools lint');
-
-        const dev = results.find(r => r.path === 'dev');
-        expect(dev.scope).toBe('local');
-        expect(dev.type).toBe('group');
 
         const gh = results.find(r => r.path === 'gh');
         expect(gh.scope).toBe('global');
         expect(gh.type).toBe('alias');
-
-        // Ensure tools is merged/handled
-        const tools = results.find(r => r.path === 'tools');
-        // It resides in both (implicitly in global as parent of lint, explicitly in local).
-        // Local wins metadata. It's a group.
-        expect(tools.type).toBe('group');
     });
 
     it('inspect shows command details', async () => {

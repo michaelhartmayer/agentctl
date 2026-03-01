@@ -116,7 +116,7 @@ describe('edge cases for 100% coverage', () => {
         expect(work?.type).toBe('group');
 
         const corrupt = cmds.find(c => c.path === 'corrupt');
-        expect(corrupt?.type).toBe('group'); // Falls back to group on corrupt json
+        expect(corrupt).toBeUndefined(); // Corrupt jsons are ignored as if no manifest exists
     });
 
     it('covers isCapped failure in prepareCommand', async () => {
@@ -194,6 +194,8 @@ describe('edge cases for 100% coverage', () => {
         const globalGroup = path.join(globalDir, 'group');
         await fs.ensureDir(localGroup);
         await fs.ensureDir(globalGroup);
+        await fs.writeJson(path.join(localGroup, 'manifest.json'), { name: 'group', type: 'group' });
+        await fs.writeJson(path.join(globalGroup, 'manifest.json'), { name: 'group', type: 'group' });
 
         // This will hit the branch where it already has the path and scope is local
         const cmds = await list({ cwd: localDir, globalDir });
@@ -355,17 +357,22 @@ describe('edge cases for 100% coverage', () => {
 
         const localCommon = path.join(localDir, '.agentctl', 'common');
         await fs.ensureDir(localCommon);
+        await fs.writeJson(path.join(localCommon, 'manifest.json'), { name: 'common', type: 'group' });
 
         const globalCommon = path.join(globalDir, 'common');
         await fs.ensureDir(globalCommon);
-        await fs.ensureDir(path.join(globalCommon, 'sub')); // Subcommand in global common
+        await fs.writeJson(path.join(globalCommon, 'manifest.json'), { name: 'common', type: 'group' });
+
+        const globalSub = path.join(globalCommon, 'sub');
+        await fs.ensureDir(globalSub); // Subcommand in global common
+        await fs.writeJson(path.join(globalSub, 'manifest.json'), { name: 'sub', type: 'group' });
 
         const cmds = await list({ cwd: localDir, globalDir });
         expect(cmds.find(c => c.path === 'common sub')).toBeDefined();
 
-        // Local Group shadows Global Capped
         const localGroup = path.join(localDir, '.agentctl', 'shadow1');
         await fs.ensureDir(localGroup);
+        await fs.writeJson(path.join(localGroup, 'manifest.json'), { name: 'shadow1', type: 'group' });
 
         const globalCapped = path.join(globalDir, 'shadow1');
         await fs.ensureDir(globalCapped);

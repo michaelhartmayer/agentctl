@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { execute } from '../src/effects';
+import { execute, Effect } from '../src/effects';
 import { spawn, execFile } from 'child_process';
 import EventEmitter from 'events';
 
@@ -20,10 +20,10 @@ vi.mock('child_process', () => ({
 describe('Effects Executor', () => {
     it('covers spawn effect branch with onExit', async () => {
         const mockChild = new EventEmitter();
-        (spawn as any).mockReturnValue(mockChild);
+        vi.mocked(spawn).mockReturnValue(mockChild as ReturnType<typeof spawn>);
 
         let exitCode = -1;
-        const effects: any[] = [{
+        const effects: Effect[] = [{
             type: 'spawn',
             command: 'echo',
             options: {},
@@ -39,8 +39,8 @@ describe('Effects Executor', () => {
     });
 
     it('covers spawn effect branch without onExit', async () => {
-        (spawn as any).mockReturnValue(new EventEmitter());
-        const effects: any[] = [{
+        vi.mocked(spawn).mockReturnValue(new EventEmitter() as ReturnType<typeof spawn>);
+        const effects: Effect[] = [{
             type: 'spawn',
             command: 'echo',
             options: {}
@@ -50,7 +50,7 @@ describe('Effects Executor', () => {
     });
 
     it('covers gitClone effect branch', async () => {
-        const effects: any[] = [{
+        const effects: Effect[] = [{
             type: 'gitClone',
             url: 'https://github.com/foo/repo',
             dest: '/tmp/dest'
