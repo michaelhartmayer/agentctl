@@ -4,7 +4,7 @@
     "access": "public"
   },
   "description": "Agent Controller - A unified interface for humans and AI agents",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "main": "dist/index.js",
   "bin": {
     "agentctl": "./dist/index.js"
