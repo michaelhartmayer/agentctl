@@ -50,6 +50,13 @@ describe('ctl scaffold', () => {
 
         const groupDir = path.join(cwd, '.agentctl', 'dev');
         expect(await fs.pathExists(groupDir)).toBe(true);
+        const groupManifestPath = path.join(groupDir, 'manifest.json');
+        expect(await fs.pathExists(groupManifestPath)).toBe(true);
+        const groupManifest = await fs.readJson(groupManifestPath);
+        expect(groupManifest).toEqual(expect.objectContaining({
+            name: 'dev',
+            type: 'group',
+        }));
 
         const cmdDir = path.join(groupDir, 'start');
         expect(await fs.pathExists(cmdDir)).toBe(true);

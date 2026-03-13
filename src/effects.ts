@@ -19,7 +19,7 @@ export type Effect =
     | { type: 'copy'; src: string; dest: string; options?: fs.CopyOptions }
     | { type: 'log'; message: string }
     | { type: 'installSkill'; targetDir: string, agent: string }
-    | { type: 'spawn'; command: string; options: SpawnOptions, onExit?: (code: number) => void }
+    | { type: 'spawn'; command: string; args?: string[]; options: SpawnOptions, onExit?: (code: number) => void }
     | { type: 'gitClone'; url: string; dest: string };
 
 import { spawn, execFile } from 'child_process';
@@ -63,7 +63,9 @@ export async function execute(effects: Effect[]) {
                 break;
             }
             case 'spawn': {
-                const child = spawn(effect.command, effect.options);
+                const child = effect.args
+                    ? spawn(effect.command, effect.args, effect.options)
+                    : spawn(effect.command, effect.options);
                 if (effect.onExit) {
                     child.on('exit', effect.onExit);
                 }

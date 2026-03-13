@@ -31,17 +31,21 @@ export const AppLogic = {
             }
 
             runCmd = runCmd.replace(/{{DIR}}/g, cmdDir);
-
-            const fullCommand = `${runCmd} ${remainingArgs.join(' ')}`;
+            const quoteArg = (arg: string): string =>
+                /[\s"'\\$`]/.test(arg) ? JSON.stringify(arg) : arg;
+            const displayedArgs = remainingArgs.map(quoteArg).join(' ');
+            const fullCommand = displayedArgs ? `${runCmd} ${displayedArgs}` : runCmd;
+            const isAlias = manifest.type === 'alias';
 
             effects.push(
                 { type: 'log', message: `[${scope}] Running: ${fullCommand}` },
                 {
                     type: 'spawn',
-                    command: fullCommand,
+                    command: isAlias ? fullCommand : runCmd,
+                    args: isAlias ? undefined : remainingArgs,
                     options: {
                         cwd: process.cwd(),
-                        shell: true,
+                        shell: isAlias,
                         stdio: 'inherit',
                         env: { ...process.env, AGENTCTL_SCOPE: scope }
                     },

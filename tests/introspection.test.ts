@@ -39,7 +39,7 @@ describe('ctl introspection', () => {
         const results = await list({ cwd: localRoot, globalDir: globalRoot });
 
         const paths = results.map(r => r.path).sort();
-        expect(paths).not.toContain('dev');
+        expect(paths).toContain('dev');
         expect(paths).toContain('dev start');
         expect(paths).toContain('gh');
         expect(paths).not.toContain('tools');

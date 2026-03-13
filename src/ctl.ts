@@ -40,6 +40,19 @@ async function getCappedAncestor(dir: string, baseDir: string): Promise<{ path: 
     return null;
 }
 
+async function getMissingAncestorGroups(args: string[], agentctlDir: string): Promise<{ dir: string, name: string }[]> {
+    const missing: { dir: string, name: string }[] = [];
+    for (let i = 1; i < args.length; i++) {
+        const segments = args.slice(0, i);
+        const dir = path.join(agentctlDir, ...segments);
+        const manifestPath = path.join(dir, 'manifest.json');
+        if (!(await fs.pathExists(manifestPath))) {
+            missing.push({ dir, name: segments[segments.length - 1] });
+        }
+    }
+    return missing;
+}
+
 async function getContext(options: { cwd?: string; globalDir?: string }): Promise<CommandContext> {
     const cwd = options.cwd || process.cwd();
     return {
@@ -59,8 +72,14 @@ export async function scaffold(args: string[], options: { cwd?: string } = {}) {
 
     const exists = await fs.pathExists(targetDir);
     const cappedAncestor = await getCappedAncestor(targetDir, agentctlDir);
+    const missingAncestorGroups = await getMissingAncestorGroups(args, agentctlDir);
 
-    const { effects } = Logic.planScaffold(args, ctx, { exists, cappedAncestor: cappedAncestor || undefined, type: 'scaffold' });
+    const { effects } = Logic.planScaffold(args, ctx, {
+        exists,
+        cappedAncestor: cappedAncestor || undefined,
+        type: 'scaffold',
+        missingAncestorGroups
+    });
     await execute(effects);
 }
 
@@ -72,12 +91,14 @@ export async function alias(args: string[], target: string, options: { cwd?: str
 
     const exists = await fs.pathExists(targetDir);
     const cappedAncestor = await getCappedAncestor(targetDir, agentctlDir);
+    const missingAncestorGroups = await getMissingAncestorGroups(args, agentctlDir);
 
     const { effects } = Logic.planScaffold(args, ctx, {
         exists,
         cappedAncestor: cappedAncestor || undefined,
         type: 'alias',
-        target
+        target,
+        missingAncestorGroups
     });
     await execute(effects);
 }
@@ -90,11 +111,13 @@ export async function group(args: string[], options: { cwd?: string } = {}) {
 
     const exists = await fs.pathExists(targetDir);
     const cappedAncestor = await getCappedAncestor(targetDir, agentctlDir);
+    const missingAncestorGroups = await getMissingAncestorGroups(args, agentctlDir);
 
     const { effects } = Logic.planScaffold(args, ctx, {
         exists,
         cappedAncestor: cappedAncestor || undefined,
-        type: 'group'
+        type: 'group',
+        missingAncestorGroups
     });
     await execute(effects);
 }

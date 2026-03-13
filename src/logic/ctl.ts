@@ -25,7 +25,8 @@ export const Logic = {
         exists: boolean,
         cappedAncestor?: { path: string, relPath: string },
         type?: 'scaffold' | 'alias' | 'group',
-        target?: string
+        target?: string,
+        missingAncestorGroups?: { dir: string, name: string }[]
     }): { effects: Effect[] } {
         if (args.length === 0) throw new Error('No command path provided');
 
@@ -46,6 +47,14 @@ export const Logic = {
         const type = options.type || 'scaffold';
         const isWin = ctx.platform === 'win32';
         const effects: Effect[] = [{ type: 'mkdir', path: targetDir }];
+
+        for (const group of options.missingAncestorGroups || []) {
+            effects.push({
+                type: 'writeJson',
+                path: path.join(group.dir, 'manifest.json'),
+                content: { name: group.name, type: 'group' }
+            });
+        }
 
         const manifest: Manifest = {
             name,
